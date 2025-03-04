@@ -7,38 +7,95 @@ static MURMUR_SEED_2: u32 = 0x85ebca6b;
 
 pub struct ElasticHashing {
     pub size: usize,
-    bucket: Vec<Vec<i32>>,
+    data: Vec<i32>,
+    bucket_offsets: Vec<usize>, // 存储每个桶的起始偏移量
 }
 
 impl ElasticHashing {
     pub fn new(size: usize) -> Self {
+        if size == 0 {
+            panic!("Size must be greater than 0");
+        }
+
         let mut hashing = ElasticHashing {
             size,
-            bucket: Vec::new(),
+            data: Vec::with_capacity(size),
+            bucket_offsets: Vec::new(),
         };
         hashing.calc_bucket_size(size);
         hashing
     }
 
     fn calc_bucket_size(&mut self, size: usize) {
-        if size == 0 {
-            panic!("Size must be greater than 0");
-        }
-
         let mut current_size = (size + 1) / 2;
         let mut remaining_size = size;
-        self.bucket = Vec::new();
-
+        
+        self.bucket_offsets = Vec::new();
+        self.bucket_offsets.push(0); // 第一个桶的起始位置
+        
+        self.data = Vec::with_capacity(size);
+        
         while remaining_size > 0 {
-            self.bucket.push(Vec::with_capacity(current_size));
+            // 为当前桶预留空间
+            self.data.resize(self.data.len() + current_size, 0);
+            
+            // 记录下一个桶的起始位置
+            self.bucket_offsets.push(self.data.len());
+            
             remaining_size -= current_size;
             current_size = (current_size + 1) / 2;
         }
+        
+        // 移除最后一个偏移量，因为它指向数据的末尾
+        self.bucket_offsets.pop();
 
         println!("Bucket sizes:");
-        for (i, bucket) in self.bucket.iter().enumerate() {
-            println!("Bucket {}: capacity {}", i, bucket.capacity());
+        for i in 0..self.bucket_offsets.len() {
+            let start = self.bucket_offsets[i];
+            let end = if i + 1 < self.bucket_offsets.len() {
+                self.bucket_offsets[i + 1]
+            } else {
+                self.data.len()
+            };
+            println!("Bucket {}: capacity {}", i, end - start);
         }
+    }
+    
+    // 获取指定桶的切片
+    pub fn get_bucket(&self, bucket_idx: usize) -> &[i32] {
+        if bucket_idx >= self.bucket_offsets.len() {
+            return &[];
+        }
+        
+        let start = self.bucket_offsets[bucket_idx];
+        let end = if bucket_idx + 1 < self.bucket_offsets.len() {
+            self.bucket_offsets[bucket_idx + 1]
+        } else {
+            self.data.len()
+        };
+        
+        &self.data[start..end]
+    }
+    
+    // 获取指定桶的可变切片
+    pub fn get_bucket_mut(&mut self, bucket_idx: usize) -> &mut [i32] {
+        if bucket_idx >= self.bucket_offsets.len() {
+            return &mut [];
+        }
+        
+        let start = self.bucket_offsets[bucket_idx];
+        let end = if bucket_idx + 1 < self.bucket_offsets.len() {
+            self.bucket_offsets[bucket_idx + 1]
+        } else {
+            self.data.len()
+        };
+        
+        &mut self.data[start..end]
+    }
+    
+    // 获取桶的数量
+    pub fn bucket_count(&self) -> usize {
+        self.bucket_offsets.len()
     }
 
     fn hash(x: i32) -> u128 {
@@ -64,10 +121,10 @@ impl ElasticHashing {
 #[test]
 fn test_bucket_size() {
     let hash = ElasticHashing::new(10);
-    assert_eq!(hash.bucket.len(), 3);
-    assert_eq!(hash.bucket[0].capacity(), 5);
-    assert_eq!(hash.bucket[1].capacity(), 3);
-    assert_eq!(hash.bucket[2].capacity(), 2);
+    assert_eq!(hash.bucket_count(), 3);
+    assert_eq!(hash.get_bucket(0).len(), 5);
+    assert_eq!(hash.get_bucket(1).len(), 3);
+    assert_eq!(hash.get_bucket(2).len(), 2);
 }
 
 #[test]
