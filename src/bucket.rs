@@ -107,14 +107,31 @@ impl ElasticHashing {
     }
 
     fn phi(a: u32, b: u32) -> u128 {
-        let mut exp: u128 = 0;
-        for i in (0..32).rev() {
-            exp = (exp << 2) | 2;
-            exp |= ((b >> i) & 1) as u128;
+        let mut result: u128 = 0;
+        
+        // 获取 b 的有效位数
+        let b_bits = if b == 0 { 0 } else { 32 - b.leading_zeros() as usize };
+        
+        // 获取 a 的有效位数
+        let a_bits = if a == 0 { 0 } else { 32 - a.leading_zeros() as usize };
+        
+        // 对 b 的每个有效位，添加 "1" 前缀
+        for i in (0..b_bits).rev() {
+            // 添加 "1" 前缀
+            result = (result << 1) | 1;
+            // 添加 b 的当前位
+            result = (result << 1) | ((b >> i) & 1) as u128;
         }
-
-        exp <<= 1;
-        (exp << 32) | a as u128
+        
+        // 添加 "0" 分隔符
+        result = (result << 1) | 0;
+        
+        // 添加 a 的有效位
+        for i in (0..a_bits).rev() {
+            result = (result << 1) | ((a >> i) & 1) as u128;
+        }
+        
+        result
     }
 }
 
@@ -135,10 +152,18 @@ fn test_bucket_size_zero() {
 
 #[test]
 fn test_phi() {
-    assert_eq!(ElasticHashing::phi(10, 15), 105637550019019117515809751050);
-    assert_eq!(ElasticHashing::phi(12, 19), 105637550019019119027638239244);
-    assert_eq!(ElasticHashing::phi(234, 2451), 105637550019055851512098980074);
-    assert_eq!(ElasticHashing::phi(14151, 124352), 105637550068028026802524927815);
+    // j=1 (1), i=1 (1) → 1 1 0 1 → 0b1101 = 13
+    assert_eq!(ElasticHashing::phi(1, 1), 13);
+    
+    // j=3 (11), i=2 (10) → 1 1 1 1 0 1 0 → 0b1111010 = 122
+    assert_eq!(ElasticHashing::phi(2, 3), 122);
+    
+    // j=5 (101), i=3 (11) → 1 1 1 0 1 1 0 1 1 → 0b111011011 = 475
+    assert_eq!(ElasticHashing::phi(3, 5), 475);
+    
+    assert_eq!(ElasticHashing::phi(15, 7), 0b11111101111);
+    
+    assert_eq!(ElasticHashing::phi(1024, 1023), 0b11111111111111111111010000000000);
 }
 
 // 10101101010010
