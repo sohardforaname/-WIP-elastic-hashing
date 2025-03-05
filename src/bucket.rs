@@ -31,37 +31,24 @@ impl ElasticHashing {
         let mut remaining_size = size;
         
         self.bucket_offsets = Vec::new();
-        self.bucket_offsets.push(0); // 第一个桶的起始位置
+        // first bucket
+        self.bucket_offsets.push(0);
         
         self.data = Vec::with_capacity(size);
         
         while remaining_size > 0 {
-            // 为当前桶预留空间
             self.data.resize(self.data.len() + current_size, 0);
-            
-            // 记录下一个桶的起始位置
+            // next bucket index
             self.bucket_offsets.push(self.data.len());
             
             remaining_size -= current_size;
             current_size = (current_size + 1) / 2;
         }
         
-        // 移除最后一个偏移量，因为它指向数据的末尾
+        // remove last offset
         self.bucket_offsets.pop();
-
-        println!("Bucket sizes:");
-        for i in 0..self.bucket_offsets.len() {
-            let start = self.bucket_offsets[i];
-            let end = if i + 1 < self.bucket_offsets.len() {
-                self.bucket_offsets[i + 1]
-            } else {
-                self.data.len()
-            };
-            println!("Bucket {}: capacity {}", i, end - start);
-        }
     }
-    
-    // 获取指定桶的切片
+
     pub fn get_bucket(&self, bucket_idx: usize) -> &[i32] {
         if bucket_idx >= self.bucket_offsets.len() {
             return &[];
@@ -76,8 +63,7 @@ impl ElasticHashing {
         
         &self.data[start..end]
     }
-    
-    // 获取指定桶的可变切片
+
     pub fn get_bucket_mut(&mut self, bucket_idx: usize) -> &mut [i32] {
         if bucket_idx >= self.bucket_offsets.len() {
             return &mut [];
@@ -92,8 +78,7 @@ impl ElasticHashing {
         
         &mut self.data[start..end]
     }
-    
-    // 获取桶的数量
+
     pub fn bucket_count(&self) -> usize {
         self.bucket_offsets.len()
     }
@@ -109,28 +94,15 @@ impl ElasticHashing {
     fn phi(a: u32, b: u32) -> u128 {
         let mut result: u128 = 0;
         
-        // 获取 b 的有效位数
         let b_bits = if b == 0 { 0 } else { 32 - b.leading_zeros() as usize };
-        
-        // 获取 a 的有效位数
         let a_bits = if a == 0 { 0 } else { 32 - a.leading_zeros() as usize };
-        
-        // 对 b 的每个有效位，添加 "1" 前缀
+
         for i in (0..b_bits).rev() {
-            // 添加 "1" 前缀
-            result = (result << 1) | 1;
-            // 添加 b 的当前位
-            result = (result << 1) | ((b >> i) & 1) as u128;
+            result = (result << 2) | (2 + ((b >> i) & 1) as u128);
         }
         
-        // 添加 "0" 分隔符
-        result = (result << 1) | 0;
-        
-        // 添加 a 的有效位
-        for i in (0..a_bits).rev() {
-            result = (result << 1) | ((a >> i) & 1) as u128;
-        }
-        
+        result <<= 1 + a_bits;
+        result |= a as u128;
         result
     }
 }
@@ -154,15 +126,15 @@ fn test_bucket_size_zero() {
 fn test_phi() {
     // j=1 (1), i=1 (1) → 1 1 0 1 → 0b1101 = 13
     assert_eq!(ElasticHashing::phi(1, 1), 13);
-    
+
     // j=3 (11), i=2 (10) → 1 1 1 1 0 1 0 → 0b1111010 = 122
     assert_eq!(ElasticHashing::phi(2, 3), 122);
-    
+
     // j=5 (101), i=3 (11) → 1 1 1 0 1 1 0 1 1 → 0b111011011 = 475
     assert_eq!(ElasticHashing::phi(3, 5), 475);
-    
+
     assert_eq!(ElasticHashing::phi(15, 7), 0b11111101111);
-    
+
     assert_eq!(ElasticHashing::phi(1024, 1023), 0b11111111111111111111010000000000);
 }
 
