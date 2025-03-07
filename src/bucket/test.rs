@@ -68,7 +68,7 @@ pub(crate) fn test_phi() {
 
 #[test]
 pub(crate) fn test_de_phi() {
-    // 测试 phi 和 de_phi 的互逆性
+    // test phi and de_phi are inverse
     let test_cases = vec![
         (1, 1),
         (1, 3),
@@ -85,25 +85,26 @@ pub(crate) fn test_de_phi() {
         let decoded = ElasticHashing::de_phi(encoded);
         assert!(
             decoded.is_some(),
-            "de_phi 返回 None，但应该返回 Some((a, b)) a: {}, b: {} encoded: {}",
+            "de_phi returns None, but should return Some((a, b)) a: {}, b: {} encoded: {}",
             a,
             b,
             encoded
         );
         let (a_decoded, b_decoded) = decoded.unwrap();
-        assert_eq!(a, a_decoded, "a 解码错误");
-        assert_eq!(b, b_decoded, "b 解码错误");
+        assert_eq!(a, a_decoded, "a decode error");
+        assert_eq!(b, b_decoded, "b decode error");
     }
     let test_none = vec![
         0b1111111111111111111111111111111111111111111111111111111111111111,
         0b1111111111111111111111111111111111111111111111111111111111111110,
+        0b11110011,
         14,
     ];
     for encoded in test_none {
         let decoded = ElasticHashing::de_phi(encoded);
         assert!(
             decoded.is_none(),
-            "de_phi 返回 Some((a, b))，但应该返回 None encoded: {}",
+            "de_phi returns Some((a, b)), but should return None encoded: {}",
             encoded
         );
     }
@@ -111,10 +112,10 @@ pub(crate) fn test_de_phi() {
 
 #[test]
 fn test_elastic_hashmap_basic() {
-    // 创建一个新的哈希表
+    // create a new hashmap
     let mut map = ElasticHashMap::<String, i32>::with_capacity(16);
 
-    // 测试插入和获取
+    // test insert and get
     map.insert("one".to_string(), 1);
     map.insert("two".to_string(), 2);
     map.insert("three".to_string(), 3);
@@ -124,20 +125,20 @@ fn test_elastic_hashmap_basic() {
     assert_eq!(map.get("three"), Some(&3));
     assert_eq!(map.get("four"), None);
 
-    // 测试长度
+    // test length
     assert_eq!(map.len(), 3);
     assert!(!map.is_empty());
 
-    // 测试更新值
+    // test update value
     map.insert("one".to_string(), 10);
     assert_eq!(map.get("one"), Some(&10));
 
-    // 测试移除
+    // test remove
     assert_eq!(map.remove("two"), Some(2));
     assert_eq!(map.get("two"), None);
     assert_eq!(map.len(), 2);
 
-    // 测试清空
+    // test clear
     map.clear();
     assert_eq!(map.len(), 0);
     assert!(map.is_empty());
@@ -150,11 +151,11 @@ fn test_elastic_hashmap_index() {
     map.insert("key1".to_string(), "value1".to_string());
     map.insert("key2".to_string(), "value2".to_string());
 
-    // 测试索引操作符
+    // test index operator
     assert_eq!(&map["key1".to_string()], "value1");
     assert_eq!(&map["key2".to_string()], "value2");
 
-    // 测试可变索引
+    // test mutable index operator
     map["key1".to_string()] = "new_value".to_string();
     assert_eq!(&map["key1".to_string()], "new_value");
 }
@@ -167,7 +168,7 @@ fn test_elastic_hashmap_iterator() {
     map.insert(2, "two".to_string());
     map.insert(3, "three".to_string());
 
-    // 收集所有键值对
+    // collect all key-value pairs
     let mut pairs: Vec<(i32, String)> = map.into_iter().collect();
     pairs.sort_by_key(|(k, _)| *k);
 
@@ -189,7 +190,7 @@ fn test_elastic_hashmap_from_iterator() {
         ("c".to_string(), 3),
     ];
 
-    // 从迭代器创建哈希表
+    // create a hashmap from iterator
     let map: ElasticHashMap<String, i32> = pairs.into_iter().collect();
 
     assert_eq!(map.len(), 3);
@@ -205,7 +206,7 @@ fn test_elastic_hashmap_extend() {
     map.insert('a', 1);
     map.insert('b', 2);
 
-    // 扩展哈希表
+    // extend hashmap
     map.extend([('c', 3), ('d', 4)]);
 
     assert_eq!(map.len(), 4);
@@ -240,7 +241,7 @@ fn test_elastic_hashmap_complex_keys() {
     assert_eq!(map.get(&key1), Some(&vec![1, 2, 3]));
     assert_eq!(map.get(&key2), Some(&vec![4, 5, 6]));
 
-    // 测试可变引用
+    // test mutable reference
     if let Some(value) = map.get_mut(&key1) {
         value.push(4);
     }
@@ -254,7 +255,7 @@ fn test_elastic_hashmap_tombstone() {
     let mut map = ElasticHashMap::<i32, i32>::with_capacity(32);
     let mut rng = rand::rng();
 
-    // 第一阶段：插入一些初始数据
+    // first stage: insert some initial data
     let initial_data: Vec<(i32, i32)> = (0..20).map(|i| (i, rng.random_range(0..1000))).collect();
 
     for (k, v) in initial_data.iter() {
@@ -262,13 +263,13 @@ fn test_elastic_hashmap_tombstone() {
     }
     assert_eq!(map.len(), 20);
 
-    // 第二阶段：删除一半的数据，创建墓碑
+    // second stage: remove half of the data, create tombstone
     for i in 0..10 {
         assert_eq!(map.remove(&i), Some(initial_data[i as usize].1));
     }
     assert_eq!(map.len(), 10);
 
-    // 第三阶段：插入新数据，应该能重用墓碑位置
+    // third stage: insert new data, should reuse tombstone position
     probe::reset_probe_num();
     let new_data: Vec<(i32, i32)> = (0..10).map(|i| (i, rng.random_range(0..1000))).collect();
 
@@ -276,10 +277,10 @@ fn test_elastic_hashmap_tombstone() {
         map.insert(*k, *v);
     }
 
-    // 记录平均探测次数
+    // record average probe count
     let avg_probe_first = probe::get_probe_num() as f64 / 10.0;
 
-    // 验证所有数据都能正确访问
+    // verify all data can be accessed correctly
     for (k, v) in new_data.iter() {
         assert_eq!(map.get(k), Some(v));
     }
@@ -288,14 +289,14 @@ fn test_elastic_hashmap_tombstone() {
         assert_eq!(map.get(&i), Some(&initial_data[i as usize].1));
     }
 
-    // 第四阶段：验证查询性能
+    // fourth stage: verify query performance
     probe::reset_probe_num();
     for (k, _) in new_data.iter() {
         map.get(k);
     }
     let avg_probe_query = probe::get_probe_num() as f64 / 10.0;
 
-    // 输出性能统计
+    // output performance statistics
     eprintln!(
         "Average probe count - Insert: {:.2}, Query: {:.2}",
         avg_probe_first, avg_probe_query

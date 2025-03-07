@@ -578,42 +578,26 @@ where
 
         let x_bits = 128 - x.leading_zeros() as usize;
 
-        let mut i = x_bits;
-        let mut c = 0;
-        let mut first_b = true;
+        let mut i: i32 = x_bits as i32 - 2;
+        let mut first_b = false;
 
-        while i > 0 {
-            i -= 1;
-            let bit = (x >> i) & 1;
-            c += 1;
-
-            if c % 2 == 0 {
-                if first_b {
-                    first_b = false;
-                    if bit == 0 {
-                        return None;
-                    }
+        while i >= 0 {
+            let bit = (x >> i) & 3;
+            if (bit >> 1) & 1 != 0 {
+                if bit & 1 == 0 && !first_b {
+                    return None;
                 }
-                b = (b << 1) | bit as u32;
-            } else if bit == 0 {
-                a = 0;
-                let mut first = true;
-                while i > 0 {
-                    i -= 1;
-                    let bit = (x >> i) & 1;
-                    if first {
-                        first = false;
-                        if bit == 0 {
-                            return None;
-                        }
-                    }
-                    a = (a << 1) | bit as u32;
-                }
+                first_b = true;
+                b = b << 1 | (bit & 1) as u32;
+                i -= 2;
+            } else {
+                i += 1;
+                a = x as u32 & ((1 << i) - 1);
                 break;
             }
         }
 
-        if a == 0 || b == 0 {
+        if a == 0 || b == 0 || (a >> (i - 1)) == 0 {
             return None;
         }
 
@@ -625,29 +609,14 @@ where
         debug_assert!(b > 0);
         let mut result: u128 = 0;
 
-        let b_bits = if b == 0 {
-            0
-        } else {
-            32 - b.leading_zeros() as usize
-        };
-
-        let a_bits = if a == 0 {
-            0
-        } else {
-            32 - a.leading_zeros() as usize
-        };
+        let b_bits = (32 - b.leading_zeros()) as usize + (b == 0) as usize;
+        let a_bits = (32 - a.leading_zeros()) as usize + (a == 0) as usize;
 
         for i in (0..b_bits).rev() {
-            result = (result << 1) | 1;
-            result = (result << 1) | ((b >> i) & 1) as u128;
+            result = (result << 2) + 2 + ((b >> i) & 1) as u128;
         }
 
-        result <<= 1;
-
-        for i in (0..a_bits).rev() {
-            result = (result << 1) | ((a >> i) & 1) as u128;
-        }
-
+        result = (result << (1 + a_bits)) | a as u128;
         result
     }
 }

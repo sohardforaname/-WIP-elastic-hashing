@@ -20,6 +20,8 @@ pub struct ProbeSequence {
 }
 
 static PROBE_NUM: AtomicUsize = AtomicUsize::new(0);
+static RANDOM_MUL: u64 = 6364136223846793005;
+static RANDOM_ADD: u64 = 1442695040888963407;
 
 pub fn reset_probe_num() {
     PROBE_NUM.store(0, Ordering::Relaxed);
@@ -69,8 +71,8 @@ impl ProbeSequence {
                 // Use a simple linear congruential generator to generate pseudo-random sequence
                 self.random_state = self
                     .random_state
-                    .wrapping_mul(6364136223846793005)
-                    .wrapping_add(1442695040888963407);
+                    .wrapping_mul(RANDOM_MUL)
+                    .wrapping_add(RANDOM_ADD);
                 let random_increment = (self.random_state >> 32) as usize;
                 self.initial_pos + random_increment
             }
