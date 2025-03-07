@@ -4,23 +4,28 @@ use crate::probe;
 
 pub struct ElasticProbe {
     seq: probe::ProbeSequence,
-    i: u32,
+    // i: u32,
     pos: usize,
 }
 
 impl ElasticProbe {
-    pub fn new(seq: probe::ProbeSequence, i: u32) -> Self {
-        Self { seq, i, pos: 0 }
+    pub fn new(seq: probe::ProbeSequence) -> Self {
+        Self { seq, pos: 0 }
     }
 
-    pub fn probe(&mut self, j: u32) -> usize {
+    pub fn probe(&mut self, i: u32, j: u32) -> usize {
         debug_assert!(j > 0);
-        let x = ElasticHashing::phi(self.i, j);
+        let x = ElasticHashing::phi(i, j);
         while self.pos < x as usize {
             self.pos += 1;
             self.seq.next();
         }
+        self.pos += 1;
         self.seq.next()
+    }
+    pub fn next_no_limit(&mut self) -> usize {
+        self.pos += 1;
+        self.seq.next_no_limit()
     }
 }
 
@@ -78,42 +83,54 @@ impl ElasticHashing {
             self.get_bucket(i as usize - 1).len(),
             probe::ProbeStrategy::Uniform,
         );
-        ElasticProbe::new(seq, i as u32)
+        ElasticProbe::new(seq)
     }
 
     pub fn get(&self, x: i32) -> Option<i32> {
-        let mut probe_vec = Vec::new();
-        for i in 1..=self.bucket_count() {
-            let bucket = self.get_bucket(i - 1);
-            let mut probe = self.sequence(x, i as _);
-            let pos = probe.probe(1 as _);
-            if matches!(bucket[pos], Some((x_1, _)) if x_1 == x) {
-                return Some(bucket[pos].unwrap().1);
-            } else {
-                probe_vec.push((probe, bucket));
-            }
-        }
-        let mut i = 2;
+        let mut probe = self.sequence(x, 1);
+        let mut k = 0;
+        // create vec of bucket size
+        let mut bucket_table = vec![false; self.bucket_count()];
+        let mut done_bucket = 0;
         loop {
-            let mut has_bucket = false;
-            for (probe, bucket) in &mut probe_vec {
-                if i <= bucket.len() {
-                    let pos = probe.probe(i as _);
-                    if matches!(bucket[pos], Some((x_1, _)) if x_1 == x) {
-                        return Some(bucket[pos].unwrap().1);
+            k += 1;
+            let pos = probe.next_no_limit();
+            if let Some((i, j)) = Self::de_phi(k - 1_u128) {
+                debug_assert_eq!(
+                    Self::phi(i, j),
+                    k - 1_u128,
+                    "phi(i,j) != k i: {}, j: {}, k: {}",
+                    i,
+                    j,
+                    k - 1
+                );
+                if i > self.bucket_count() as u32 {
+                    continue;
+                }
+                if bucket_table[i as usize - 1] {
+                    continue;
+                }
+                let bucket = self.get_bucket(i as usize - 1);
+                if let Some((x_1, y)) = bucket[pos % bucket.len()] {
+                    if x_1 == x {
+                        return Some(y);
                     }
-                    has_bucket = true;
+                    if j >= bucket.len() as u32 {
+                        bucket_table[i as usize - 1] = true;
+                        done_bucket += 1;
+                        if done_bucket >= self.bucket_count() {
+                            return None;
+                        }
+                    }
                 } else {
-                    break;
+                    bucket_table[i as usize - 1] = true;
+                    done_bucket += 1;
+                    if done_bucket >= self.bucket_count() {
+                        return None;
+                    }
                 }
             }
-            if has_bucket {
-                i += 1;
-            } else {
-                break;
-            }
         }
-        None
     }
 
     /// Calculate the batch size for the i-th insert batch
@@ -183,10 +200,10 @@ impl ElasticHashing {
         let mut probe = self.sequence(x, i as _);
         for j in 1..=max_try {
             let bucket = self.get_bucket_mut(i - 1);
-            let pos = probe.probe(j as _);
+            let pos = probe.probe(i as _, j as _);
             if bucket[pos].is_none() {
                 bucket[pos] = Some((x, v));
-                self.bucket_load[i as usize - 1] += 1;
+                self.bucket_load[i - 1] += 1;
                 self.current_batch.0 += 1;
                 if self.current_batch.0 >= self.batch_max[self.current_batch.1] {
                     self.current_batch = (0, self.current_batch.1 + 1);
@@ -196,8 +213,8 @@ impl ElasticHashing {
                     #[cfg(any(debug_assertions, test))]
                     {
                         for j in 0..i {
-                            let bucket_size = self.get_bucket(j as usize).len();
-                            let bucket_load = self.bucket_load[j as usize];
+                            let bucket_size = self.get_bucket(j).len();
+                            let bucket_load = self.bucket_load[j];
                             let expected = bucket_size
                                 - (bucket_size as f32 * self.delta / 2.0).floor() as usize;
                             assert_eq!(
@@ -214,8 +231,8 @@ impl ElasticHashing {
                     // A_{i+1} has exactly $\lceil0.75 \cdot |A_{i+1}|\rceil$ elements
                     #[cfg(any(debug_assertions, test))]
                     {
-                        let bucket_size = self.get_bucket(i as usize).len();
-                        let bucket_load = self.bucket_load[i as usize];
+                        let bucket_size = self.get_bucket(i).len();
+                        let bucket_load = self.bucket_load[i];
                         let expected = (bucket_size as f32 * 0.75).ceil() as usize;
                         assert_eq!(
                             expected,
@@ -325,6 +342,65 @@ impl ElasticHashing {
         self.bucket_offsets.len()
     }
 
+    fn de_phi(x: u128) -> Option<(u32, u32)> {
+        if x == 0 {
+            return None;
+        }
+
+        let mut a: u32 = 0;
+        let mut b: u32 = 0;
+
+        // 计算 x 的位数
+        let x_bits = 128 - x.leading_zeros() as usize;
+
+        // 从最高位开始读取
+        let mut i = x_bits;
+        let mut c = 0;
+        let mut first_b = true;
+
+        while i > 0 {
+            i -= 1;
+            let bit = (x >> i) & 1;
+            c += 1;
+
+            // 读取 b 的位（从最高位到分隔符"0"）, b 是 1 b0 1 b1 ... 1 bn 0
+            if c % 2 == 0 {
+                if first_b {
+                    first_b = false;
+                    if bit == 0 {
+                        return None;
+                    }
+                }
+                b = (b << 1) | bit as u32;
+            } else if bit == 0 {
+                // 0 后面的就是a，即x的低位
+                // 找到分隔符"0"后，读取剩余的位作为a
+                a = 0;
+                // i -= 1;
+                let mut first = true;
+                while i > 0 {
+                    i -= 1;
+                    let bit = (x >> i) & 1;
+                    if first {
+                        first = false;
+                        if bit == 0 {
+                            return None;
+                        }
+                    }
+                    a = (a << 1) | bit as u32;
+                }
+                break;
+            }
+        }
+
+        // 确保 a 和 b 都不为 0
+        if a == 0 || b == 0 {
+            return None;
+        }
+
+        Some((a, b))
+    }
+
     fn phi(a: u32, b: u32) -> u128 {
         debug_assert!(a > 0);
         debug_assert!(b > 0);
@@ -353,7 +429,7 @@ impl ElasticHashing {
         }
 
         // 添加 "0" 分隔符
-        result = (result << 1) | 0;
+        result <<= 1;
 
         // 添加 a 的有效位
         for i in (0..a_bits).rev() {

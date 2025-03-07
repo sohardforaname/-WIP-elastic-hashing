@@ -1,3 +1,5 @@
+use crate::probe;
+
 use super::ElasticHashing;
 
 #[test]
@@ -32,6 +34,14 @@ pub(crate) fn test_insert() {
     for i in 0..space {
         assert_eq!(hash.get(data[i]), Some(data[i]));
     }
+    let data = (0..space)
+        .map(|_| rng.random_range(-1000000..0))
+        .collect::<Vec<_>>();
+    probe::reset_probe_num();
+    for i in 0..space {
+        assert_eq!(hash.get(data[i]), None);
+    }
+    eprintln!("probe num: {}", probe::get_probe_num() as f64 / space as f64);
 }
 
 #[test]
@@ -51,4 +61,47 @@ pub(crate) fn test_phi() {
         ElasticHashing::phi(1024, 1023),
         0b11111111111111111111010000000000
     );
+}
+
+#[test]
+pub(crate) fn test_de_phi() {
+    // 测试 phi 和 de_phi 的互逆性
+    let test_cases = vec![
+        (1, 1),
+        (1, 3),
+        (2, 3),
+        (3, 5),
+        (15, 7),
+        (1024, 1023),
+        (42, 99),
+        (255, 255),
+    ];
+
+    for (a, b) in test_cases {
+        let encoded = ElasticHashing::phi(a, b);
+        let decoded = ElasticHashing::de_phi(encoded);
+        assert!(
+            decoded.is_some(),
+            "de_phi 返回 None，但应该返回 Some((a, b)) a: {}, b: {} encoded: {}",
+            a,
+            b,
+            encoded
+        );
+        let (a_decoded, b_decoded) = decoded.unwrap();
+        assert_eq!(a, a_decoded, "a 解码错误");
+        assert_eq!(b, b_decoded, "b 解码错误");
+    }
+    let test_none = vec![
+        0b1111111111111111111111111111111111111111111111111111111111111111,
+        0b1111111111111111111111111111111111111111111111111111111111111110,
+        14,
+    ];
+    for encoded in test_none {
+        let decoded = ElasticHashing::de_phi(encoded);
+        assert!(
+            decoded.is_none(),
+            "de_phi 返回 Some((a, b))，但应该返回 None encoded: {}",
+            encoded
+        );
+    }
 }

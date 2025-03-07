@@ -1,3 +1,5 @@
+use std::sync::atomic::{AtomicUsize, Ordering};
+
 /// 探测策略枚举
 pub enum ProbeStrategy {
     Linear,
@@ -17,6 +19,16 @@ pub struct ProbeSequence {
     random_state: u64,
 }
 
+static PROBE_NUM:AtomicUsize = AtomicUsize::new(0);
+
+pub fn reset_probe_num() {
+    PROBE_NUM.store(0, Ordering::Relaxed);
+}
+
+pub fn get_probe_num() -> usize {
+    PROBE_NUM.load(Ordering::Relaxed)
+}
+
 impl ProbeSequence {
     /// 创建新的探测序列
     pub fn new(key: u64, capacity: usize, strategy: ProbeStrategy) -> Self {
@@ -25,8 +37,8 @@ impl ProbeSequence {
         let secondary_hash = match strategy {
             ProbeStrategy::DoubleHash => {
                 // 一个简单的第二哈希函数，确保结果不为0
-                let h2 = 1 + (key as usize % (capacity - 1));
-                h2
+                
+                1 + (key as usize % (capacity - 1))
             }
             _ => 0,
         };
@@ -43,14 +55,18 @@ impl ProbeSequence {
 
     /// 获取下一个探测位置
     pub fn next(&mut self) -> usize {
+        self.next_no_limit() % self.capacity
+    }
+
+    pub fn next_no_limit(&mut self) -> usize {
+        PROBE_NUM.fetch_add(1, Ordering::Relaxed);
         let pos = match self.strategy {
-            ProbeStrategy::Linear => (self.initial_pos + self.current_step) % self.capacity,
+            ProbeStrategy::Linear => self.initial_pos + self.current_step,
             ProbeStrategy::Quadratic => {
-                (self.initial_pos + self.current_step + self.current_step * self.current_step)
-                    % self.capacity
+                self.initial_pos + self.current_step + self.current_step * self.current_step
             }
             ProbeStrategy::DoubleHash => {
-                (self.initial_pos + self.current_step * self.secondary_hash) % self.capacity
+                self.initial_pos + self.current_step * self.secondary_hash
             }
             ProbeStrategy::Uniform => {
                 // 使用简单的线性同余生成器生成伪随机序列
@@ -59,7 +75,7 @@ impl ProbeSequence {
                     .wrapping_mul(6364136223846793005)
                     .wrapping_add(1442695040888963407);
                 let random_increment = (self.random_state >> 32) as usize;
-                (self.initial_pos + random_increment) % self.capacity
+                self.initial_pos + random_increment
             }
         };
 
