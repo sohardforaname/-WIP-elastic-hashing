@@ -1,25 +1,25 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-/// 探测策略枚举
+/// Probe strategy enumeration
 pub enum ProbeStrategy {
     Linear,
     Quadratic,
     DoubleHash,
-    Uniform, // 新增均匀探测策略
+    Uniform, // Added uniform probing strategy
 }
 
-/// 探测序列生成器
+/// Probe sequence generator
 pub struct ProbeSequence {
     initial_pos: usize,
     current_step: usize,
     capacity: usize,
     strategy: ProbeStrategy,
     secondary_hash: usize,
-    // 用于均匀探测的随机数生成器状态
+    // Random number generator state for uniform probing
     random_state: u64,
 }
 
-static PROBE_NUM:AtomicUsize = AtomicUsize::new(0);
+static PROBE_NUM: AtomicUsize = AtomicUsize::new(0);
 
 pub fn reset_probe_num() {
     PROBE_NUM.store(0, Ordering::Relaxed);
@@ -30,14 +30,13 @@ pub fn get_probe_num() -> usize {
 }
 
 impl ProbeSequence {
-    /// 创建新的探测序列
+    /// Create a new probe sequence
     pub fn new(key: u64, capacity: usize, strategy: ProbeStrategy) -> Self {
         let initial_pos = (key as usize) % capacity;
-        // 对于双重哈希，计算第二个哈希值
+        // For double hashing, calculate the second hash value
         let secondary_hash = match strategy {
             ProbeStrategy::DoubleHash => {
-                // 一个简单的第二哈希函数，确保结果不为0
-                
+                // A simple second hash function, ensuring the result is not zero
                 1 + (key as usize % (capacity - 1))
             }
             _ => 0,
@@ -49,11 +48,11 @@ impl ProbeSequence {
             capacity,
             strategy,
             secondary_hash,
-            random_state: key, // 使用key作为随机数种子
+            random_state: key, // Use key as random seed
         }
     }
 
-    /// 获取下一个探测位置
+    /// Get the next probe position
     pub fn next(&mut self) -> usize {
         self.next_no_limit() % self.capacity
     }
@@ -65,11 +64,9 @@ impl ProbeSequence {
             ProbeStrategy::Quadratic => {
                 self.initial_pos + self.current_step + self.current_step * self.current_step
             }
-            ProbeStrategy::DoubleHash => {
-                self.initial_pos + self.current_step * self.secondary_hash
-            }
+            ProbeStrategy::DoubleHash => self.initial_pos + self.current_step * self.secondary_hash,
             ProbeStrategy::Uniform => {
-                // 使用简单的线性同余生成器生成伪随机序列
+                // Use a simple linear congruential generator to generate pseudo-random sequence
                 self.random_state = self
                     .random_state
                     .wrapping_mul(6364136223846793005)
