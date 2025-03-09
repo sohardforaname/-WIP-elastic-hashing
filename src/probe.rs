@@ -1,5 +1,3 @@
-use std::sync::atomic::{AtomicUsize, Ordering};
-
 /// Probe strategy enumeration
 pub enum ProbeStrategy {
     Linear,
@@ -12,24 +10,14 @@ pub enum ProbeStrategy {
 pub struct ProbeSequence {
     initial_pos: usize,
     current_step: usize,
-    capacity: usize,
     strategy: ProbeStrategy,
     secondary_hash: usize,
     // Random number generator state for uniform probing
     random_state: u64,
 }
 
-static PROBE_NUM: AtomicUsize = AtomicUsize::new(0);
 static RANDOM_MUL: u64 = 6364136223846793005;
 static RANDOM_ADD: u64 = 1442695040888963407;
-
-pub fn reset_probe_num() {
-    PROBE_NUM.store(0, Ordering::Relaxed);
-}
-
-pub fn get_probe_num() -> usize {
-    PROBE_NUM.load(Ordering::Relaxed)
-}
 
 impl ProbeSequence {
     /// Create a new probe sequence
@@ -49,20 +37,22 @@ impl ProbeSequence {
         ProbeSequence {
             initial_pos,
             current_step: 0,
-            capacity,
             strategy,
             secondary_hash,
             random_state: key, // Use key as random seed
         }
     }
 
-    /// Get the next probe position
-    pub fn next(&mut self) -> usize {
-        self.next_no_limit() & (self.capacity - 1)
+    /// Get the next probe position sequence    
+    pub fn next_sequence(&mut self, length: usize) -> Vec<usize> {
+        let mut seq = Vec::with_capacity(length);
+        for _ in 0..length {
+            seq.push(self.next());
+        }
+        seq
     }
 
-    pub fn next_no_limit(&mut self) -> usize {
-        // PROBE_NUM.fetch_add(1, Ordering::Relaxed);
+    fn next(&mut self) -> usize {
         let pos = match self.strategy {
             ProbeStrategy::Linear => self.initial_pos + self.current_step,
             ProbeStrategy::Quadratic => {

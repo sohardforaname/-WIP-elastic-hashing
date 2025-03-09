@@ -27,6 +27,7 @@ where
 }
 
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct ElasticHashMap<K, V>
 where
     K: Eq + Hash + Clone,
@@ -99,16 +100,16 @@ where
         hasher.finish()
     }
 
-    pub fn sequence<Q: ?Sized>(&self, key: &Q, i: i32) -> ElasticProbe
+    /// give key and i, get the probe sequence on bucket i
+    pub fn sequence<Q: ?Sized>(&self, key: &Q, bucket_idx: usize) -> ElasticProbe
     where
         K: Borrow<Q>,
         Q: Hash + Eq,
     {
-        debug_assert!(i > 0);
         let hash = self.hash_key(key);
         let seq = probe::ProbeSequence::new(
             hash,
-            self.get_bucket(i as usize - 1).len(),
+            self.get_bucket(bucket_idx).len(),
             probe::ProbeStrategy::Uniform,
         );
         ElasticProbe::new(seq)
@@ -120,67 +121,59 @@ where
         Q: Hash + Eq,
     {
         let mut probe = self.sequence(key, 1);
-        let mut k = 0;
-        let mut bucket_table = vec![false; self.bucket_count()];
-        let mut done_bucket = 0;
-        loop {
-            k += 1;
-            let pos = probe.next_no_limit();
-            if let Some((i, j)) = Self::de_phi(k - 1_u128) {
-                debug_assert_eq!(
-                    Self::phi(i, j),
-                    k - 1_u128,
-                    "phi(i,j) != k i: {}, j: {}, k: {}",
-                    i,
-                    j,
-                    k - 1
-                );
-                if i > self.bucket_count() as u32 {
-                    continue;
-                }
-                if bucket_table[i as usize - 1] {
-                    continue;
-                }
-                let bucket_idx = i as usize - 1;
-                let bucket_len = self.get_bucket(bucket_idx).len();
-                let actual_pos = pos & (bucket_len - 1);
+        // let mut k = 0;
+        // let mut bucket_table = vec![false; self.bucket_count()];
+        // let mut done_bucket = 0;
+        // loop {
+        //     k += 1;
+        //     if let Some((i, j)) = Self::de_phi(k - 1_u128) {
+        //         let pos = probe.next_no_limit();
+        //         if i > self.bucket_count() as u32 {
+        //             continue;
+        //         }
+        //         if bucket_table[i as usize - 1] {
+        //             continue;
+        //         }
+        //         let bucket_idx = i as usize - 1;
+        //         let bucket_len = self.get_bucket(bucket_idx).len();
+        //         let actual_pos = pos & (bucket_len - 1);
 
-                let start = self.bucket_offsets[bucket_idx];
-                let actual_idx = start + actual_pos;
+        //         let start = self.bucket_offsets[bucket_idx];
+        //         let actual_idx = start + actual_pos;
 
-                match &self.data[actual_idx] {
-                    EntryState::Occupied((ref stored_key, ref value)) => {
-                        if key.eq(stored_key.borrow()) {
-                            return Some(value);
-                        }
+        //         match &self.data[actual_idx] {
+        //             EntryState::Occupied((ref stored_key, ref value)) => {
+        //                 if key.eq(stored_key.borrow()) {
+        //                     return Some(value);
+        //                 }
 
-                        if j >= bucket_len as u32 {
-                            bucket_table[bucket_idx] = true;
-                            done_bucket += 1;
-                            if done_bucket >= self.bucket_count() {
-                                return None;
-                            }
-                        }
-                    }
-                    EntryState::Empty => {
-                        bucket_table[bucket_idx] = true;
-                        done_bucket += 1;
-                        if done_bucket >= self.bucket_count() {
-                            return None;
-                        }
-                    }
-                    EntryState::Tombstone => {
-                        if j >= bucket_len as u32 {
-                            bucket_table[bucket_idx] = true;
-                            done_bucket += 1;
-                            if done_bucket >= self.bucket_count() {
-                                return None;
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        //                 if j >= bucket_len as u32 {
+        //                     bucket_table[bucket_idx] = true;
+        //                     done_bucket += 1;
+        //                     if done_bucket >= self.bucket_count() {
+        //                         return None;
+        //                     }
+        //                 }
+        //             }
+        //             EntryState::Empty => {
+        //                 bucket_table[bucket_idx] = true;
+        //                 done_bucket += 1;
+        //                 if done_bucket >= self.bucket_count() {
+        //                     return None;
+        //                 }
+        //             }
+        //             EntryState::Tombstone => {
+        //                 if j >= bucket_len as u32 {
+        //                     bucket_table[bucket_idx] = true;
+        //                     done_bucket += 1;
+        //                     if done_bucket >= self.bucket_count() {
+        //                         return None;
+        //                     }
+        //                 }
+        //             }
+        //         }
+        //     }
+        // }
     }
 
     #[allow(unused_assignments)]
@@ -197,8 +190,8 @@ where
 
         loop {
             k += 1;
-            let pos = probe.next_no_limit();
             if let Some((i, j)) = Self::de_phi(k - 1_u128) {
+                let pos = probe.next_no_limit();
                 if i > self.bucket_count() as u32 {
                     continue;
                 }
@@ -493,8 +486,8 @@ where
 
         loop {
             k += 1;
-            let pos = probe.next_no_limit();
             if let Some((i, j)) = Self::de_phi(k - 1_u128) {
+                let pos = probe.next_no_limit();
                 if i > self.bucket_count() as u32 {
                     continue;
                 }
