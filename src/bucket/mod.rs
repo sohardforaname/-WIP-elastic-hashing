@@ -1,4 +1,4 @@
-mod elastic_probe;
+mod probe;
 mod map;
 mod func;
 mod traits;

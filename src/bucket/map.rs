@@ -2,11 +2,10 @@ use std::{
     borrow::Borrow,
     collections::hash_map::DefaultHasher,
     hash::{Hash, Hasher},
-    num::NonZeroUsize,
     ops::ControlFlow,
 };
 
-use super::{elastic_probe::ElasticProbe, utils::delta};
+use super::{probe::ElasticProbe, utils::delta};
 use crate::probe;
 
 // Generic KV pair
