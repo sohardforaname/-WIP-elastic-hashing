@@ -33,13 +33,15 @@ pub fn get_probe_num() -> usize {
 
 impl ProbeSequence {
     /// Create a new probe sequence
+    /// 
+    /// the capacity must be power of 2
     pub fn new(key: u64, capacity: usize, strategy: ProbeStrategy) -> Self {
-        let initial_pos = (key as usize) % capacity;
+        let initial_pos = (key as usize) & (capacity - 1);
         // For double hashing, calculate the second hash value
         let secondary_hash = match strategy {
             ProbeStrategy::DoubleHash => {
                 // A simple second hash function, ensuring the result is not zero
-                1 + (key as usize % (capacity - 1))
+                (1 + ((key >> 2 + key >> 4 + key >> 6) ^ key)) as usize
             }
             _ => 0,
         };
@@ -56,11 +58,11 @@ impl ProbeSequence {
 
     /// Get the next probe position
     pub fn next(&mut self) -> usize {
-        self.next_no_limit() % self.capacity
+        self.next_no_limit() & (self.capacity - 1)
     }
 
     pub fn next_no_limit(&mut self) -> usize {
-        PROBE_NUM.fetch_add(1, Ordering::Relaxed);
+        // PROBE_NUM.fetch_add(1, Ordering::Relaxed);
         let pos = match self.strategy {
             ProbeStrategy::Linear => self.initial_pos + self.current_step,
             ProbeStrategy::Quadratic => {

@@ -1,5 +1,6 @@
 mod elastic_probe;
 mod map;
+mod func;
 mod traits;
 mod utils;
 

@@ -2,6 +2,7 @@ use std::{
     borrow::Borrow,
     collections::hash_map::DefaultHasher,
     hash::{Hash, Hasher},
+    num::NonZeroUsize,
     ops::ControlFlow,
 };
 
@@ -143,7 +144,7 @@ where
                 }
                 let bucket_idx = i as usize - 1;
                 let bucket_len = self.get_bucket(bucket_idx).len();
-                let actual_pos = pos % bucket_len;
+                let actual_pos = pos & (bucket_len - 1);
 
                 let start = self.bucket_offsets[bucket_idx];
                 let actual_idx = start + actual_pos;
@@ -183,6 +184,7 @@ where
         }
     }
 
+    #[allow(unused_assignments)]
     pub fn get_mut<Q: ?Sized>(&mut self, key: &Q) -> Option<&mut V>
     where
         K: Borrow<Q>,
@@ -207,7 +209,7 @@ where
 
                 let bucket_idx = i as usize - 1;
                 let bucket_len = self.get_bucket(bucket_idx).len();
-                let actual_pos = pos % bucket_len;
+                let actual_pos = pos & (bucket_len - 1);
 
                 let start = self.bucket_offsets[bucket_idx];
                 let actual_idx = start + actual_pos;
@@ -413,6 +415,9 @@ where
         1.0 - load_factor
     }
 
+    /// calculate the bucket size and offsets
+    ///
+    /// it's sure that the bucket size is power of 2
     fn calc_bucket_size(&mut self, size: usize) {
         let mut current_size = (size + 1) / 2;
         let mut remaining_size = size;
@@ -435,6 +440,9 @@ where
         self.bucket_offsets.pop();
     }
 
+    /// get the bucket slice
+    ///
+    /// it's sure that the bucket size is power of 2
     pub fn get_bucket(&self, bucket_idx: usize) -> &[EntryState<K, V>] {
         if bucket_idx >= self.bucket_offsets.len() {
             return &[];
@@ -450,6 +458,9 @@ where
         &self.data[start..end]
     }
 
+    /// get the mutable bucket slice
+    ///
+    /// it's sure that the bucket size is power of 2
     pub fn get_bucket_mut(&mut self, bucket_idx: usize) -> &mut [EntryState<K, V>] {
         if bucket_idx >= self.bucket_offsets.len() {
             return &mut [];
@@ -469,6 +480,7 @@ where
         self.bucket_offsets.len()
     }
 
+    #[allow(unused_assignments)]
     pub fn remove<Q: ?Sized>(&mut self, key: &Q) -> Option<V>
     where
         K: Borrow<Q>,
@@ -493,7 +505,7 @@ where
 
                 let bucket_idx = i as usize - 1;
                 let bucket_len = self.get_bucket(bucket_idx).len();
-                let actual_pos = pos % bucket_len;
+                let actual_pos = pos & (bucket_len - 1);
 
                 let start = self.bucket_offsets[bucket_idx];
                 let actual_idx = start + actual_pos;
@@ -566,57 +578,5 @@ where
         for i in self.tombstone_bucket_map.iter_mut() {
             *i = 0;
         }
-    }
-
-    pub fn de_phi(x: u128) -> Option<(u32, u32)> {
-        if x == 0 {
-            return None;
-        }
-
-        let mut a: u32 = 0;
-        let mut b: u32 = 0;
-
-        let x_bits = 128 - x.leading_zeros() as usize;
-
-        let mut i: i32 = x_bits as i32 - 2;
-        let mut first_b = false;
-
-        while i >= 0 {
-            let bit = (x >> i) & 3;
-            if (bit >> 1) & 1 != 0 {
-                if bit & 1 == 0 && !first_b {
-                    return None;
-                }
-                first_b = true;
-                b = b << 1 | (bit & 1) as u32;
-                i -= 2;
-            } else {
-                i += 1;
-                a = x as u32 & ((1 << i) - 1);
-                break;
-            }
-        }
-
-        if a == 0 || b == 0 || (a >> (i - 1)) == 0 {
-            return None;
-        }
-
-        Some((a, b))
-    }
-
-    pub fn phi(a: u32, b: u32) -> u128 {
-        debug_assert!(a > 0);
-        debug_assert!(b > 0);
-        let mut result: u128 = 0;
-
-        let b_bits = (32 - b.leading_zeros()) as usize + (b == 0) as usize;
-        let a_bits = (32 - a.leading_zeros()) as usize + (a == 0) as usize;
-
-        for i in (0..b_bits).rev() {
-            result = (result << 2) + 2 + ((b >> i) & 1) as u128;
-        }
-
-        result = (result << (1 + a_bits)) | a as u128;
-        result
     }
 }
